@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import HTMLFlipBook from "react-pageflip";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -27,6 +27,8 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pageAspect, setPageAspect] = useState(1 / 1.414);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const bookRef = useRef<FlipBookHandle | null>(null);
 
   useEffect(() => {
@@ -120,6 +122,20 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   const flipPrev = () => bookRef.current?.pageFlip()?.flipPrev();
   const flipNext = () => bookRef.current?.pageFlip()?.flipNext();
 
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      containerRef.current?.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-20">
@@ -144,16 +160,20 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
     );
   }
 
-  const maxW = window.innerWidth * 0.32;
-  const maxH = window.innerHeight * 0.7;
-  const widthFromMax = Math.min(420, Math.max(280, maxW));
+  const vw = isFullscreen ? window.innerWidth : window.innerWidth * 0.32;
+  const vh = isFullscreen ? window.innerHeight * 0.85 : window.innerHeight * 0.7;
+  const maxPageW = isFullscreen ? 700 : 420;
+  const widthFromMax = Math.min(maxPageW, Math.max(280, vw));
   const heightFromWidth = widthFromMax / pageAspect;
-  const pageHeight = Math.min(heightFromWidth, maxH);
+  const pageHeight = Math.min(heightFromWidth, vh);
   const pageWidth = pageHeight * pageAspect;
 
   return (
-    <div className="flex flex-col items-center gap-6">
-      <div className="flip-book-container">
+    <div
+      ref={containerRef}
+      className={`flex flex-col items-center gap-6 ${isFullscreen ? "justify-center bg-background h-screen" : ""}`}
+    >
+      <div className="flip-book-container relative">
         <HTMLFlipBook
           ref={bookRef}
           width={pageWidth}
@@ -213,6 +233,14 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
           disabled={currentPage >= totalPages - 1}
         >
           <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+        >
+          {isFullscreen ? <X className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
         </Button>
       </div>
     </div>
