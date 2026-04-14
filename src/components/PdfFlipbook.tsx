@@ -38,7 +38,15 @@ const PdfFlipbook: React.FC<PdfFlipbookProps> = ({ file }) => {
     const renderPdf = async () => {
       setLoading(true);
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      const CHUNK_SIZE = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+        const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+        binary += String.fromCharCode.apply(null, Array.from(chunk));
+      }
+      const base64 = btoa(binary);
+      const pdf = await pdfjsLib.getDocument({ data: atob(base64) }).promise;
       const numPages = pdf.numPages;
       setTotalPages(numPages);
 
