@@ -27,6 +27,7 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pageAspect, setPageAspect] = useState(1 / 1.414);
+  const [originalSize, setOriginalSize] = useState<{ w: number; h: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const bookRef = useRef<FlipBookHandle | null>(null);
@@ -67,10 +68,13 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
 
         for (let i = 1; i <= numPages; i++) {
           const page = await pdf.getPage(i);
+          const baseViewport = page.getViewport({ scale: 1 });
           const viewport = page.getViewport({ scale: 1.5 });
 
           if (i === 1 && !cancelled) {
             setPageAspect(viewport.width / viewport.height);
+            // Store original PDF page size in CSS pixels (72 DPI)
+            setOriginalSize({ w: baseViewport.width, h: baseViewport.height });
           }
           const canvas = document.createElement("canvas");
           const context = canvas.getContext("2d");
@@ -160,13 +164,24 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
     );
   }
 
-  const vw = isFullscreen ? window.innerWidth : window.innerWidth * 0.32;
-  const vh = isFullscreen ? window.innerHeight * 0.85 : window.innerHeight * 0.7;
-  const maxPageW = isFullscreen ? 700 : 420;
-  const widthFromMax = Math.min(maxPageW, Math.max(280, vw));
-  const heightFromWidth = widthFromMax / pageAspect;
-  const pageHeight = Math.min(heightFromWidth, vh);
-  const pageWidth = pageHeight * pageAspect;
+  let pageWidth: number;
+  let pageHeight: number;
+
+  if (isFullscreen && originalSize) {
+    // Use original PDF size, but cap to screen if it's larger
+    const maxW = window.innerWidth * 0.45;
+    const maxH = window.innerHeight * 0.85;
+    const scale = Math.min(1, maxW / originalSize.w, maxH / originalSize.h);
+    pageWidth = originalSize.w * scale;
+    pageHeight = originalSize.h * scale;
+  } else {
+    const vw = window.innerWidth * 0.32;
+    const vh = window.innerHeight * 0.7;
+    const widthFromMax = Math.min(420, Math.max(280, vw));
+    const heightFromWidth = widthFromMax / pageAspect;
+    pageHeight = Math.min(heightFromWidth, vh);
+    pageWidth = pageHeight * pageAspect;
+  }
 
   return (
     <div
