@@ -4,6 +4,7 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { ChevronLeft, ChevronRight, Maximize, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { playPageTurnSound } from "@/hooks/usePageTurnSound";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -121,6 +122,7 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
 
   const onFlip = useCallback((event: { data: number }) => {
     setCurrentPage(event.data);
+    playPageTurnSound();
   }, []);
 
   const flipPrev = () => bookRef.current?.pageFlip()?.flipPrev();
