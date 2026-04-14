@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import HTMLFlipBook from "react-pageflip";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ChevronLeft, ChevronRight, Maximize, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, X, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { playPageTurnSound } from "@/hooks/usePageTurnSound";
+import { playPageTurnSound, isSoundMuted, setSoundMuted } from "@/hooks/usePageTurnSound";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
