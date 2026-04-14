@@ -104,7 +104,7 @@ body {
 }
 
 .page-content {
-  background: white;
+  background: hsl(var(--background));
   display: flex;
   align-items: center;
   justify-content: center;
