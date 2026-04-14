@@ -4,7 +4,12 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { ChevronLeft, ChevronRight, Maximize, X, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { playPageTurnSound, isSoundMuted, setSoundMuted } from "@/hooks/usePageTurnSound";
+import {
+  isSoundMuted,
+  playPageTurnSound,
+  setSoundMuted,
+  unlockPageTurnSound,
+} from "@/hooks/usePageTurnSound";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -75,9 +80,9 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
 
           if (i === 1 && !cancelled) {
             setPageAspect(viewport.width / viewport.height);
-            // Store original PDF page size in CSS pixels (72 DPI)
             setOriginalSize({ w: baseViewport.width, h: baseViewport.height });
           }
+
           const canvas = document.createElement("canvas");
           const context = canvas.getContext("2d");
 
@@ -121,13 +126,24 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
     };
   }, [file]);
 
+  const primeSound = useCallback(() => {
+    void unlockPageTurnSound();
+  }, []);
+
   const onFlip = useCallback((event: { data: number }) => {
     setCurrentPage(event.data);
     playPageTurnSound();
   }, []);
 
-  const flipPrev = () => bookRef.current?.pageFlip()?.flipPrev();
-  const flipNext = () => bookRef.current?.pageFlip()?.flipNext();
+  const flipPrev = () => {
+    primeSound();
+    bookRef.current?.pageFlip()?.flipPrev();
+  };
+
+  const flipNext = () => {
+    primeSound();
+    bookRef.current?.pageFlip()?.flipNext();
+  };
 
   const toggleFullscreen = () => {
     if (!isFullscreen) {
@@ -171,7 +187,6 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   let pageHeight: number;
 
   if (isFullscreen && originalSize) {
-    // Use original PDF size, but cap to screen if it's larger
     const maxW = window.innerWidth * 0.45;
     const maxH = window.innerHeight * 0.85;
     const scale = Math.min(1, maxW / originalSize.w, maxH / originalSize.h);
@@ -189,6 +204,8 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   return (
     <div
       ref={containerRef}
+      onPointerDownCapture={primeSound}
+      onKeyDownCapture={primeSound}
       className={`flex flex-col items-center gap-6 ${isFullscreen ? "justify-center bg-background h-screen" : ""}`}
     >
       <div className="flip-book-container relative">
