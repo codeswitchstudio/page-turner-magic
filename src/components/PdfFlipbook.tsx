@@ -26,6 +26,7 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [pageAspect, setPageAspect] = useState(1 / 1.414);
   const bookRef = useRef<FlipBookHandle | null>(null);
 
   useEffect(() => {
@@ -65,6 +66,10 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
         for (let i = 1; i <= numPages; i++) {
           const page = await pdf.getPage(i);
           const viewport = page.getViewport({ scale: 1.5 });
+
+          if (i === 1 && !cancelled) {
+            setPageAspect(viewport.width / viewport.height);
+          }
           const canvas = document.createElement("canvas");
           const context = canvas.getContext("2d");
 
@@ -139,8 +144,12 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
     );
   }
 
-  const pageWidth = Math.min(420, Math.max(280, window.innerWidth * 0.32));
-  const pageHeight = pageWidth * 1.414;
+  const maxW = window.innerWidth * 0.32;
+  const maxH = window.innerHeight * 0.7;
+  const widthFromMax = Math.min(420, Math.max(280, maxW));
+  const heightFromWidth = widthFromMax / pageAspect;
+  const pageHeight = Math.min(heightFromWidth, maxH);
+  const pageWidth = pageHeight * pageAspect;
 
   return (
     <div className="flex flex-col items-center gap-6">
