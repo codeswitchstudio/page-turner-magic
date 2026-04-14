@@ -1,76 +1,115 @@
-import React, { useState, useEffect, useRef, useCallback, forwardRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import HTMLFlipBook from "react-pageflip";
-import * as pdfjsLib from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
-
-interface PageProps {
-  image: string;
-  number: number;
-}
-
-const Page = forwardRef<HTMLDivElement, PageProps>(({ image, number }, ref) => (
-  <div ref={ref} className="page-content">
-    <img
-      src={image}
-      alt={`Page ${number}`}
-      style={{ width: "100%", height: "100%", objectFit: "contain" }}
-    />
-  </div>
-));
-Page.displayName = "Page";
+GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface PdfFlipbookProps {
   file: File;
 }
 
-const PdfFlipbook: React.FC<PdfFlipbookProps> = ({ file }) => {
+type FlipBookHandle = {
+  pageFlip: () => {
+    flipPrev: () => void;
+    flipNext: () => void;
+  } | null;
+};
+
+const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   const [pages, setPages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [phase, setPhase] = useState<"loading" | "rendering">("loading");
   const [progress, setProgress] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const bookRef = useRef<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const bookRef = useRef<FlipBookHandle | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const renderPdf = async () => {
       setLoading(true);
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      const CHUNK_SIZE = 8192;
-      for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-        const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
-        binary += String.fromCharCode.apply(null, Array.from(chunk));
-      }
-      const base64 = btoa(binary);
-      const pdf = await pdfjsLib.getDocument({ data: atob(base64) }).promise;
-      const numPages = pdf.numPages;
-      setTotalPages(numPages);
+      setPhase("loading");
+      setProgress(0);
+      setPages([]);
+      setCurrentPage(0);
+      setTotalPages(0);
+      setError(null);
 
-      const rendered: string[] = [];
-      for (let i = 1; i <= numPages; i++) {
-        const page = await pdf.getPage(i);
-        const scale = 1.5;
-        const viewport = page.getViewport({ scale });
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d")!;
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        rendered.push(canvas.toDataURL("image/jpeg", 0.9));
-        setProgress(Math.round((i / numPages) * 100));
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = getDocument({
+          data: new Uint8Array(arrayBuffer),
+          useWorkerFetch: false,
+          isEvalSupported: false,
+        });
+
+        loadingTask.onProgress = ({ loaded, total }) => {
+          if (cancelled || !total) return;
+          setProgress(Math.max(1, Math.round((loaded / total) * 30)));
+        };
+
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+
+        const numPages = pdf.numPages;
+        setTotalPages(numPages);
+        setPhase("rendering");
+
+        const renderedPages: string[] = [];
+
+        for (let i = 1; i <= numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+
+          if (!context) {
+            throw new Error("Canvas rendering is unavailable.");
+          }
+
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+
+          await page.render({
+            canvasContext: context,
+            viewport,
+          }).promise;
+
+          renderedPages.push(canvas.toDataURL("image/jpeg", 0.9));
+
+          if (!cancelled) {
+            setProgress(30 + Math.round((i / numPages) * 70));
+          }
+        }
+
+        if (cancelled) return;
+
+        setPages(renderedPages);
+        setLoading(false);
+      } catch (renderError) {
+        console.error("Failed to load PDF", renderError);
+
+        if (cancelled) return;
+
+        setError("This PDF could not be loaded. Please try another file.");
+        setLoading(false);
       }
-      setPages(rendered);
-      setLoading(false);
     };
-    renderPdf();
+
+    void renderPdf();
+
+    return () => {
+      cancelled = true;
+    };
   }, [file]);
 
-  const onFlip = useCallback((e: any) => {
-    setCurrentPage(e.data);
+  const onFlip = useCallback((event: { data: number }) => {
+    setCurrentPage(event.data);
   }, []);
 
   const flipPrev = () => bookRef.current?.pageFlip()?.flipPrev();
@@ -86,24 +125,31 @@ const PdfFlipbook: React.FC<PdfFlipbookProps> = ({ file }) => {
           />
         </div>
         <p className="text-sm text-muted-foreground">
-          Rendering pages… {progress}%
+          {phase === "loading" ? "Loading PDF…" : "Rendering pages…"} {progress}%
         </p>
       </div>
     );
   }
 
-  const pageWidth = Math.min(400, window.innerWidth * 0.4);
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-20">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
+
+  const pageWidth = Math.min(420, Math.max(280, window.innerWidth * 0.32));
   const pageHeight = pageWidth * 1.414;
 
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="flip-book-container">
-        {/* @ts-ignore */}
         <HTMLFlipBook
           ref={bookRef}
           width={pageWidth}
           height={pageHeight}
-          showCover={true}
+          showCover={pages.length > 1}
           onFlip={onFlip}
           flippingTime={600}
           usePortrait={false}
@@ -113,9 +159,9 @@ const PdfFlipbook: React.FC<PdfFlipbookProps> = ({ file }) => {
           style={{}}
           startPage={0}
           size="fixed"
-          minWidth={300}
+          minWidth={280}
           maxWidth={600}
-          minHeight={400}
+          minHeight={396}
           maxHeight={900}
           drawShadow={true}
           startZIndex={0}
@@ -126,20 +172,37 @@ const PdfFlipbook: React.FC<PdfFlipbookProps> = ({ file }) => {
           showPageCorners={true}
           disableFlipByClick={false}
         >
-          {pages.map((img, i) => (
-            <Page key={i} image={img} number={i + 1} />
+          {pages.map((image, index) => (
+            <div key={`${index}-${image.slice(0, 24)}`} className="page-content">
+              <img
+                src={image}
+                alt={`Page ${index + 1}`}
+                className="h-full w-full object-contain"
+                loading="lazy"
+              />
+            </div>
           ))}
         </HTMLFlipBook>
       </div>
 
       <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" onClick={flipPrev}>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={flipPrev}
+          disabled={currentPage <= 0}
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-sm text-muted-foreground min-w-[100px] text-center">
-          Page {currentPage + 1} of {totalPages}
+        <span className="min-w-[100px] text-center text-sm text-muted-foreground">
+          Page {Math.min(currentPage + 1, totalPages)} of {totalPages}
         </span>
-        <Button variant="outline" size="icon" onClick={flipNext}>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={flipNext}
+          disabled={currentPage >= totalPages - 1}
+        >
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
