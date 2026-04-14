@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import HTMLFlipBook from "react-pageflip";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ChevronLeft, ChevronRight, Maximize, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, X, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { playPageTurnSound } from "@/hooks/usePageTurnSound";
+import { playPageTurnSound, isSoundMuted, setSoundMuted } from "@/hooks/usePageTurnSound";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -30,6 +30,7 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
   const [pageAspect, setPageAspect] = useState(1 / 1.414);
   const [originalSize, setOriginalSize] = useState<{ w: number; h: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [muted, setMuted] = useState(isSoundMuted());
   const containerRef = useRef<HTMLDivElement | null>(null);
   const bookRef = useRef<FlipBookHandle | null>(null);
 
@@ -259,6 +260,18 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         >
           {isFullscreen ? <X className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => {
+            const next = !muted;
+            setMuted(next);
+            setSoundMuted(next);
+          }}
+          title={muted ? "Unmute" : "Mute"}
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
         </Button>
       </div>
     </div>
