@@ -190,6 +190,7 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
     >
       <div className="flip-book-container relative">
         <HTMLFlipBook
+          key={isFullscreen ? "fs" : "normal"}
           ref={bookRef}
           width={pageWidth}
           height={pageHeight}
@@ -201,12 +202,12 @@ const PdfFlipbook = ({ file }: PdfFlipbookProps) => {
           mobileScrollSupport={true}
           className=""
           style={{}}
-          startPage={0}
+          startPage={currentPage}
           size="fixed"
-          minWidth={280}
-          maxWidth={600}
-          minHeight={396}
-          maxHeight={900}
+          minWidth={200}
+          maxWidth={1200}
+          minHeight={280}
+          maxHeight={1700}
           drawShadow={true}
           startZIndex={0}
           autoSize={false}
